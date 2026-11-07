@@ -1,6 +1,10 @@
 """FastAPI app: /ingest /analyze /feedback /ask /memories /reset (+ demo helpers)."""
 import json
 import logging
+import warnings
+
+# Suppress noisy async resource cleanup warnings in Windows console
+warnings.filterwarnings("ignore", category=ResourceWarning)
 
 from fastapi import FastAPI, HTTPException, Query
 
@@ -93,3 +97,8 @@ def get_metrics() -> MetricsResponse:
 @app.get("/demo-alerts")
 def demo_alerts() -> list[dict]:
     return json.loads((DATA_DIR / "demo_alerts.json").read_text())
+
+
+@app.get("/graph")
+def get_graph() -> dict:
+    return memory.get_graph()

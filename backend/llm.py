@@ -1,58 +1,59 @@
-# backend/llm.py
-"""Groq LLM wrapper with simple retry logic.
-The ``Groq`` client from ``groq`` expects an ``api_key`` and supports ``chat.completions.create``.
-We expose a ``call_llm`` that takes a system prompt and user message and returns the content.
-"""
-
-import os
-import time
-from typing import Any, List
-
-import httpx
+"""Groq LLM client wrapper with structured JSON output, retries, and JSON repair."""
+import json
+import logging
+import re
 from groq import Groq
-from pydantic import BaseModel
 
-from .config import GROQ_API_KEY
+from backend.config import settings
+from backend.retry import with_retries
 
-# Initialise client – the ``groq`` library uses the environment variable ``GROQ_API_KEY``
-# but we also allow passing explicitly.
-client = Groq(api_key=GROQ_API_KEY)
+log = logging.getLogger("runbookmind.llm")
 
+def _get_client() -> Groq:
+    return Groq(api_key=settings.groq_api_key)
 
-class LLMResponse(BaseModel):
-    content: str
+def _clean_json_text(text: str) -> str:
+    """Strip markdown code fence if present."""
+    text = text.strip()
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    if match:
+        text = match.group(1).strip()
+    return text
 
+@with_retries(attempts=3, base_delay=1.0)
+def complete_json(system_prompt: str, user_prompt: str) -> dict:
+    """Call Groq with strict JSON output, retry on error, and repair response."""
+    client = _get_client()
+    
+    # Try calling Groq with JSON object response format
+    try:
+        resp = client.chat.completions.create(
+            model=settings.groq_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=1500,
+        )
+        content = resp.choices[0].message.content or "{}"
+    except Exception as e:
+        log.warning(f"Groq API call with json_object failed ({e}), retrying without explicit format: {e}")
+        resp = client.chat.completions.create(
+            model=settings.groq_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.1,
+            max_tokens=1500,
+        )
+        content = resp.choices[0].message.content or "{}"
 
-def call_llm(system_prompt: str, user_message: str, max_retries: int = 3, backoff: float = 1.5) -> str:
-    """Send a chat completion request to Groq and return the assistant's message.
-
-    Parameters
-    ----------
-    system_prompt: str
-        System‑level instruction (LLM_SYSTEM_PROMPT).
-    user_message: str
-        The actual query (often the reflect output).
-    max_retries: int, default 3
-        Number of retry attempts on network / 5xx errors.
-    backoff: float, default 1.5
-        Seconds to wait between retries (exponential).
-    """
-    for attempt in range(1, max_retries + 1):
-        try:
-            resp = client.chat.completions.create(
-                model="gpt-oss-120b",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.2,
-                max_output_tokens=1024,
-            )
-            # ``choices`` list always has one element for Groq
-            return resp.choices[0].message.content.strip()
-        except Exception as e:
-            if attempt == max_retries:
-                raise
-            time.sleep(backoff ** attempt)
-    # Should never reach here
-    raise RuntimeError("LLM call failed after retries")
+    cleaned = _clean_json_text(content)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        log.error(f"Malformed JSON from LLM: {cleaned}")
+        raise ValueError(f"Failed to parse LLM JSON: {exc}") from exc

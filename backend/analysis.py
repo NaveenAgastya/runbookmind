@@ -2,7 +2,6 @@
 import re
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from backend import cache, llm, memory, metrics, prompts
@@ -46,15 +45,7 @@ def _generate(req: AnalyzeRequest) -> tuple[Suggestion, list[MemoryItem]]:
         return _safe_suggestion(raw, [], "", grounded=False), []
 
     query = prompts.recall_query(req)
-    reflection = ""
-    if settings.use_reflect_in_analyze:
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            recall_job = pool.submit(memory.recall, query)
-            reflect_job = pool.submit(memory.reflect, prompts.REFLECT_QUESTION + prompts.alert_block(req))
-            memories = recall_job.result()
-            reflection = reflect_job.result()
-    else:
-        memories = memory.recall(query)
+    memories = memory.recall(query)
 
     if not memories:
         # FR-7: say so plainly, give general guidance, never fabricate incidents.
@@ -62,6 +53,14 @@ def _generate(req: AnalyzeRequest) -> tuple[Suggestion, list[MemoryItem]]:
         suggestion = _safe_suggestion(raw, [], "", grounded=False)
         suggestion.confidence_reason = "No relevant team history was found. This is general guidance, not based on team history."
         return suggestion, []
+
+    reflection = ""
+    if settings.use_reflect_in_analyze:
+        try:
+            reflection = memory.reflect(prompts.REFLECT_QUESTION + prompts.alert_block(req))
+        except Exception:
+            # Reflection is optional reasoning enhancement; memories provide primary grounding
+            reflection = ""
 
     raw = llm.complete_json(prompts.SYSTEM_MEMORY, prompts.memory_prompt(req, memories, reflection))
     return _safe_suggestion(raw, memories, reflection, grounded=True), memories
@@ -127,7 +126,6 @@ def submit_feedback(fb: FeedbackRequest) -> FeedbackResponse:
 
 
 def ask(question: str) -> AskResponse:
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        answer_job = pool.submit(memory.reflect, question)
-        sources_job = pool.submit(memory.recall, question, 1500)
-        return AskResponse(answer=answer_job.result() or "No answer found in team history.", sources=sources_job.result()[:5])
+    sources = memory.recall(question, 1500)
+    answer = memory.reflect(question)
+    return AskResponse(answer=answer or "No answer found in team history.", sources=sources[:5])
