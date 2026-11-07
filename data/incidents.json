@@ -1,0 +1,29 @@
+# data/incidents.json
+[
+  {
+    "id": "INC-1042",
+    "symptoms": "payments-api returned 5xx for 23 minutes after deploy",
+    "log_snippet": "HikariPool-1 - Connection is not available, request timed out after 30000ms",
+    "date": "2026-09-14T12:00:00",
+    "severity": "Sev1",
+    "services": ["payments-api", "postgres-primary"],
+    "root_cause": "database connection pool exhausted due to per‑request connection creation",
+    "actions_tried": ["restart pods", "rollback to v2.4.0"],
+    "resolution": "rollback resolved in 4 minutes",
+    "permanent_fix": "increase max pool size to 50 and fix connection leak",
+    "responders": ["Marcus Rao"]
+  },
+  {
+    "id": "INC-1087",
+    "symptoms": "orders-api 5xx after new v2.4.1 deploy",
+    "log_snippet": "Timeout acquiring DB connection",
+    "date": "2026-10-02T09:30:00",
+    "severity": "Sev2",
+    "services": ["orders-api", "postgres-primary"],
+    "root_cause": "same connection‑pool exhaustion pattern",
+    "actions_tried": ["restart pods", "rollback"],
+    "resolution": "rollback fixed the issue",
+    "permanent_fix": "increase pool size, fix leak",
+    "responders": ["Anita Patel"]
+  }
+]

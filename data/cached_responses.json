@@ -1,0 +1,17 @@
+[
+  {"title": "payments-api 5xx error rate above 30%", "use_memory": true,
+   "suggestion": {"likely_root_cause": "Database connection pool exhaustion after the new release (same pattern as INC-1042 and INC-0977).",
+     "recommended_first_action": "Roll back the most recent deploy of payments-api; it resolved INC-1042 in 4 minutes.",
+     "alternative_actions": ["Check HikariPool active/idle/waiting counts and postgres connection slots", "After rollback, look for a connection leak in the new release"],
+     "actions_to_avoid": ["Restarting pods: no effect in INC-1042 and errors returned in INC-0977", "Scaling replicas: made the pool problem worse in INC-1009"],
+     "similar_incidents": [{"id": "INC-1042", "reason": "payments-api 5xx after deploy with HikariPool timeout errors"}, {"id": "INC-0977", "reason": "orders-api pool exhaustion after release, rollback fixed it"}],
+     "confidence": "high", "confidence_reason": "Identical log signature and recent deploy match several past incidents.", "based_on_team_history": true},
+   "memories": [{"text": "INC-1042 (2026-09-14, Sev1): payments-api returned 5xx for 23 minutes after the v2.4.1 deploy. Root cause: connection pool exhausted. Rolled back to v2.4.0 (resolved in 4 minutes).", "type": "world", "date": "2026-09-14", "context": "incident postmortem"}]},
+  {"title": "payments-api 5xx error rate above 30%", "use_memory": false,
+   "suggestion": {"likely_root_cause": "Unknown; could be a bad deploy, a dependency failure or resource saturation.",
+     "recommended_first_action": "Check the logs and restart the service.",
+     "alternative_actions": ["Check recent deployments", "Check database health", "Scale up the service"],
+     "actions_to_avoid": [], "similar_incidents": [], "confidence": "low",
+     "confidence_reason": "General guidance, not based on team history.", "based_on_team_history": false},
+   "memories": []}
+]
