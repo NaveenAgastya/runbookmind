@@ -51,10 +51,3 @@ RunbookMind is an on‑call incident‑response AI assistant that **remembers ev
    ```
 7. Open the UI at `http://localhost:8501` and start experimenting!
 
-## Hackathon Checklist
-- **Production‑grade code** – type‑annotated, Pydantic validation, retry logic.
-- **Clear demo script** – Memory OFF → Memory ON → feedback loop → learning curve.
-- **Metrics** – accuracy chart, side‑by‑side comparison.
-- **Documentation** – this README, architecture diagram (`docs/architecture.png`).
-
-Feel free to explore the `backend/` and `frontend/` packages – they contain the core logic.
